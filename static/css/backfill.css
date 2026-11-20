@@ -48,3 +48,22 @@ h1 { margin: 0.25rem 0 0; font-size: 1.35rem; }
 .tag { display:inline-block; padding:0.1rem 0.5rem; border-radius:999px; background:#2a3f66; font-size:0.78rem; }
 label { display:block; margin: 0.65rem 0; }
 input, select { width:100%; margin-top:0.3rem; padding:0.5rem 0.65rem; border-radius:10px; border:1px solid var(--line); background:#101b30; color:var(--ink); font:inherit; }
+label.inline { margin: 0.2rem 0; flex: 1 1 220px; }
+label.inline input { margin-top:0.15rem; }
+
+/* ---------- 片锁 / 争用 ---------- */
+.mono { font-family: "JetBrains Mono", "Consolas", monospace; font-size: 0.82rem; }
+.row { display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin:0.4rem 0; }
+.chip {
+  display:inline-block; padding:0.08rem 0.5rem; border-radius:999px;
+  background:#1a2b49; border:1px solid var(--line); color:var(--ink);
+  font-size:0.76rem; font-family:"JetBrains Mono","Consolas",monospace;
+}
+.chip.danger { border-color:var(--danger); color:var(--danger); }
+.tag.ok { background:rgba(62,207,142,0.16); color:var(--ok); }
+.tag.danger { background:rgba(255,107,107,0.16); color:var(--danger); }
+.card.inner { background:#1a2b49; }
+.card-reject { border-color: rgba(255,107,107,0.65); box-shadow: inset 3px 0 0 var(--danger); }
+.inner-wall { margin-top:0.6rem; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.bar { height:8px; border-radius:999px; background:#101b30; overflow:hidden; margin:0.55rem 0; }
+.bar i { display:block; height:100%; background:linear-gradient(90deg,var(--accent),#ffc85c); }

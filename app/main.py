@@ -8,12 +8,18 @@ from app.config import Config
 from app.db import init_db
 from app.services.errors import ServiceError
 from app.services.windows import (
+    claim_slice,
     coverage_report,
     list_coverage,
+    list_ledger,
+    list_rounds,
     list_slices,
     list_windows,
     plan_slices,
+    progress_report,
     replay_slice,
+    run_contention_round,
+    slice_key_detail,
 )
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -25,6 +31,14 @@ def _json(resp, data, status=200):
     resp.status = str(status)
     resp.content_type = "application/json"
     resp.text = json.dumps(data, ensure_ascii=False)
+
+
+async def _read_body(req) -> dict:
+    try:
+        body = await req.get_media()
+    except Exception:
+        return {}
+    return body if isinstance(body, dict) else {}
 
 
 def _read_session(req) -> dict:
@@ -138,7 +152,86 @@ class ApiReplay:
     async def on_post(self, req, resp, slice_id):
         try:
             require_user(req)
-            _json(resp, {"slice": replay_slice(int(slice_id))})
+            body = await _read_body(req)
+            claimer = str(body.get("claimer") or "回灌值班")
+            result = replay_slice(int(slice_id), claimer)
+            _json(resp, {"slice": result["slice"], "result": result})
+        except ServiceError as exc:
+            payload = {"error": exc.message}
+            if exc.payload:
+                payload["details"] = exc.payload
+            _json(resp, payload, exc.status_code)
+
+
+class ApiClaim:
+    async def on_post(self, req, resp, slice_id):
+        try:
+            require_user(req)
+            body = await _read_body(req)
+            claimer = str(body.get("claimer") or "").strip()
+            _json(resp, claim_slice(int(slice_id), claimer))
+        except ServiceError as exc:
+            payload = {"error": exc.message}
+            if exc.payload:
+                payload["details"] = exc.payload
+            _json(resp, payload, exc.status_code)
+
+
+class ApiSliceDetail:
+    async def on_get(self, req, resp, slice_id):
+        try:
+            require_user(req)
+            _json(resp, slice_key_detail(int(slice_id)))
+        except ServiceError as exc:
+            _json(resp, {"error": exc.message}, exc.status_code)
+
+
+class ApiLedger:
+    async def on_get(self, req, resp):
+        try:
+            require_user(req)
+            key = req.get_param("slice_key")
+            round_no = req.get_param("round_no")
+            limit = req.get_param_as_int("limit") or 200
+            _json(resp, {"items": list_ledger(key, round_no, limit)})
+        except ServiceError as exc:
+            _json(resp, {"error": exc.message}, exc.status_code)
+
+
+class ApiContention:
+    async def on_get(self, req, resp):
+        try:
+            require_user(req)
+            _json(resp, {"items": list_rounds()})
+        except ServiceError as exc:
+            _json(resp, {"error": exc.message}, exc.status_code)
+
+    async def on_post(self, req, resp):
+        try:
+            require_user(req)
+            body = await _read_body(req)
+            sid = int(body.get("slice_id"))
+            claimers = body.get("claimers")
+            if claimers is not None and not isinstance(claimers, list):
+                raise ValueError
+            replay = body.get("replay", True)
+            if isinstance(replay, str):
+                replay = replay.strip().lower() not in ("0", "false", "no", "")
+            else:
+                replay = bool(replay)
+            _json(resp, run_contention_round(sid, claimers, replay))
+        except ServiceError as exc:
+            _json(resp, {"error": exc.message}, exc.status_code)
+        except (TypeError, ValueError):
+            _json(resp, {"error": "slice_id 无效"}, 400)
+
+
+class ApiProgress:
+    async def on_get(self, req, resp):
+        try:
+            require_user(req)
+            wid = req.get_param_as_int("window_id")
+            _json(resp, progress_report(wid))
         except ServiceError as exc:
             _json(resp, {"error": exc.message}, exc.status_code)
 
@@ -176,6 +269,11 @@ def create_app() -> falcon.asgi.App:
     app.add_route("/api/windows/{window_id:int}/plan", ApiPlan())
     app.add_route("/api/windows/{window_id:int}/slices", ApiSlices())
     app.add_route("/api/slices/{slice_id:int}/replay", ApiReplay())
+    app.add_route("/api/slices/{slice_id:int}/claim", ApiClaim())
+    app.add_route("/api/slices/{slice_id:int}/detail", ApiSliceDetail())
+    app.add_route("/api/claim-ledger", ApiLedger())
+    app.add_route("/api/contention", ApiContention())
+    app.add_route("/api/progress", ApiProgress())
     app.add_route("/api/coverage-reports", ApiCoverage())
     app.add_static_route("/static", str(STATIC))
     return app
